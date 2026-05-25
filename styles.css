@@ -666,11 +666,13 @@ p {
 
 #scheduleCapture .captureBrand {
   min-width: 0;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: 14px;
   justify-content: flex-start;
+  overflow: visible;
 }
 
 #scheduleCapture .captureBrandLogo {
@@ -693,6 +695,10 @@ p {
   font-weight: 600;
   color: var(--cuadranteHeaderMuted);
 }
+#scheduleCapture .captureBrandText {
+  text-align: left;
+  white-space: nowrap;
+}
 
 #scheduleCapture .metaItem {
   display: flex;
@@ -710,8 +716,8 @@ p {
 }
 #scheduleCapture .metaItemWithBrand {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) 1fr;
-  gap: 26px;
+  grid-template-columns: minmax(300px, 420px) 1fr;
+  gap: 30px;
   align-items: center;
 }
 #scheduleCapture .metaWeekWrap {

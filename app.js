@@ -1243,12 +1243,30 @@ function generate(schedule, state) {
 
 async function saveImage(schedule) {
   const target = qs("scheduleCapture");
+  const tableWrap = target.querySelector(".tableWrap");
+  const table = target.querySelector(".scheduleTable");
+  const prevTargetWidth = target.style.width;
+  const prevWrapOverflow = tableWrap ? tableWrap.style.overflow : "";
+  const prevWrapMaxWidth = tableWrap ? tableWrap.style.maxWidth : "";
+  const exportWidth = Math.max(
+    target.clientWidth,
+    target.scrollWidth,
+    tableWrap?.scrollWidth || 0,
+    table?.scrollWidth || 0,
+  );
   target.classList.add("export-clean");
   try {
+    target.style.width = `${exportWidth}px`;
+    if (tableWrap) {
+      tableWrap.style.overflow = "visible";
+      tableWrap.style.maxWidth = "none";
+    }
     const canvas = await html2canvas(target, {
       backgroundColor: "#ffffff",
       scale: Math.max(2, Math.min(3, window.devicePixelRatio || 2)),
       useCORS: true,
+      width: exportWidth,
+      windowWidth: exportWidth,
     });
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
@@ -1257,6 +1275,11 @@ async function saveImage(schedule) {
     a.click();
     a.remove();
   } finally {
+    target.style.width = prevTargetWidth;
+    if (tableWrap) {
+      tableWrap.style.overflow = prevWrapOverflow;
+      tableWrap.style.maxWidth = prevWrapMaxWidth;
+    }
     target.classList.remove("export-clean");
   }
 }
