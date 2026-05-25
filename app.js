@@ -1,6 +1,7 @@
 /* global html2canvas */
 
 const STORAGE_KEY = "turnosPazy.localState.v4";
+const MAX_GENERATION_HISTORY = 50;
 const DEFAULT_PEOPLE = ["Georgi Valeriev", "Antonella Sipan", "Iñigo Puyol", "Luz Romero", "Patricia Lopez", "Jorge Romera", "Irene Peñalosa", "Maria Jose Rubio", "Alessandra Solis", "Adrian Garces", "Ignacio Rivas", "Alonso Garcia", "Rodrigo Fernandez", "Lara Carrasco"];
 const DAYS = [{ key: "JUE", label: "Jueves" }, { key: "VIE", label: "Viernes" }, { key: "SAB", label: "Sábado" }, { key: "DOM", label: "Domingo" }, { key: "LUN", label: "Lunes" }, { key: "MAR", label: "Martes" }, { key: "MIE", label: "Miércoles" }];
 const FRANJAS = [{ key: "MANANA", label: "Mañana" }, { key: "TARDE", label: "Tarde" }, { key: "NOCHE", label: "Noche" }];
@@ -40,6 +41,9 @@ const NAME_FIX = {
 /** Claves normalizadas de personas retiradas del cuadrante (no aparecen ni en datos guardados). */
 const EXCLUDED_PERSON_KEYS = new Set(["magui cerda"]);
 const DEFAULT_VAC_SHEET_URL = "https://docs.google.com/spreadsheets/d/1eAFz2aAyk57GBtax1GEOEVTZMRVUFUI0WjECzz3PmnM/edit?pli=1&gid=1549907077#gid=1549907077";
+/** Rango amplio para leer filas de vacaciones desde el export de la hoja (no solo la semana en pantalla). */
+const VAC_AUTO_FETCH_FROM_ISO = "2025-01-01";
+const VAC_AUTO_FETCH_TO_ISO = "2032-12-31";
 const MONTH_MAP = {
   ene: 0, enero: 0,
   feb: 1, febrero: 1,
@@ -88,6 +92,13 @@ function fixName(s) {
   return NAME_FIX[n] || n;
 }
 
+function normalizeKey(s) {
+  return norm(s)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 function isExcludedPerson(name) {
   const raw = norm(name || "");
   if (!raw) return false;
@@ -100,11 +111,30 @@ function isExcludedPerson(name) {
 /** Limpia listas y cuadrantes guardados para que no queden excluid@s. */
 function sanitizeLocalState(state) {
   state.teamRosterPinned = true;
-  state.people = sortNames(uniq((state.people || DEFAULT_PEOPLE).map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
-  if (!state.people.length) state.people = [...DEFAULT_PEOPLE].filter((p) => !isExcludedPerson(p));
+  state.teamRemovedPersonKeys = uniq(
+    (Array.isArray(state.teamRemovedPersonKeys) ? state.teamRemovedPersonKeys : [])
+      .map((k) => normalizeKey(String(k)))
+      .filter(Boolean),
+  ).slice(0, 200);
+  const removedSet = new Set(state.teamRemovedPersonKeys);
+
+  const keepPerson = (p) => {
+    const n = fixName(p);
+    if (!n || isExcludedPerson(n)) return false;
+    return !removedSet.has(normalizeKey(n));
+  };
+
+  /** Lista activa a partir del JSON guardado (puede estar vacía a propósito). */
+  let fromSaved = uniq((Array.isArray(state.people) ? state.people : []).map(fixName).filter(Boolean).filter(keepPerson));
+  if (!fromSaved.length && (!Array.isArray(state.people) || state.people === null || state.people === undefined)) {
+    /** Primera vez / sin campo `people`: plantilla inicial. */
+    fromSaved = uniq(DEFAULT_PEOPLE.map(fixName).filter(Boolean).filter(keepPerson));
+  }
+  /** Si falta equipo o sólo hay bajas manuales, rellena con plantilla menos esas bajas (nunca reincorporamos a quien se quitó a mano). */
+  state.people = sortNames(fromSaved.length ? fromSaved : uniq(DEFAULT_PEOPLE.map(fixName).filter(Boolean).filter(keepPerson)));
 
   state.vacationRanges = Array.isArray(state.vacationRanges)
-    ? state.vacationRanges.filter((r) => !isExcludedPerson(r.person))
+    ? state.vacationRanges.filter((r) => !isExcludedPerson(r.person) && !removedSet.has(normalizeKey(fixName(r.person))))
     : [];
 
   const schedules = state.schedulesByWeek || {};
@@ -113,10 +143,23 @@ function sanitizeLocalState(state) {
     if (!sch?.slots) continue;
     for (const id of Object.keys(sch.slots)) {
       const slot = sch.slots[id];
-      if (!slot || !isExcludedPerson(slot.asignadoA)) continue;
+      if (!slot) continue;
+      const a = norm(slot.asignadoA || "");
+      if (!a) continue;
+      if (!isExcludedPerson(a) && !removedSet.has(normalizeKey(fixName(a)))) continue;
       sch.slots[id] = { ...slot, asignadoA: "" };
     }
   }
+
+  state.generationHistory = Array.isArray(state.generationHistory) ? state.generationHistory : [];
+  for (const h of state.generationHistory) {
+    if (h && h.savedAtMs == null && h.savedAt) h.savedAtMs = new Date(h.savedAt).getTime();
+  }
+  state.generationHistory = state.generationHistory
+    .filter((h) => h && h.id && typeof h.weekStart === "string" && h.savedAt && h.slots && typeof h.slots === "object")
+    .sort((a, b) => (Number(b.savedAtMs) || 0) - (Number(a.savedAtMs) || 0))
+    .slice(0, MAX_GENERATION_HISTORY);
+
   return state;
 }
 
@@ -124,13 +167,6 @@ function sanitizeLocalState(state) {
 function allVentasForDropdown(state) {
   const list = Array.isArray(state.people) ? state.people : [];
   return sortNames(uniq(list.map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
-}
-
-function normalizeKey(s) {
-  return norm(s)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
 }
 
 function purgePersonFromState(state, personDisplayName) {
@@ -709,22 +745,144 @@ function emptySchedule(weekStart) {
   return out;
 }
 
+function pushGenerationHistory(state, schedule) {
+  if (!schedule?.slots || !schedule.weekStart) return;
+  const hist = Array.isArray(state.generationHistory) ? state.generationHistory : [];
+  const nowMs = Date.now();
+  const entry = {
+    id: `${nowMs}_${Math.random().toString(36).slice(2, 10)}`,
+    savedAt: new Date(nowMs).toISOString(),
+    savedAtMs: nowMs,
+    weekStart: schedule.weekStart,
+    tiradaNum: Number(state.generationCounter || 0),
+    slots: JSON.parse(JSON.stringify(schedule.slots)),
+  };
+  state.generationHistory = [entry, ...hist].slice(0, MAX_GENERATION_HISTORY);
+}
+
+function getFilteredGenerationHistory(state, filterDayIso) {
+  const raw = Array.isArray(state.generationHistory) ? [...state.generationHistory] : [];
+  raw.sort((a, b) => (Number(b.savedAtMs) || 0) - (Number(a.savedAtMs) || 0));
+  const fd = clamp(filterDayIso || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fd)) return raw;
+  return raw.filter((e) => {
+    const ms = Number(e.savedAtMs) || new Date(e.savedAt).getTime();
+    return toISO(new Date(ms)) === fd;
+  });
+}
+
+function formatWeekHistoryRange(weekStartIso) {
+  try {
+    const w = weekFrom(computeThursday(weekStartIso));
+    const a = w[0].date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+    const b = w[6].date.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+    return `${a} → ${b}`;
+  } catch {
+    return String(weekStartIso || "");
+  }
+}
+
+function historyEntrySelectLabel(e) {
+  const ms = Number(e.savedAtMs) || new Date(e.savedAt).getTime();
+  const d = new Date(ms);
+  const dayPart = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  const timePart = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const wr = formatWeekHistoryRange(e.weekStart);
+  return `${dayPart} ${timePart} · ${wr} · #${e.tiradaNum}`;
+}
+
+function findGenerationHistoryEntry(state, id) {
+  if (!id) return null;
+  return (state.generationHistory || []).find((x) => x.id === id) || null;
+}
+
+function updateGenerationHistoryDetail(state, detailEl, entryId) {
+  detailEl.replaceChildren();
+  const e = findGenerationHistoryEntry(state, entryId);
+  if (!e) return;
+  const ms = Number(e.savedAtMs) || new Date(e.savedAt).getTime();
+  const d = new Date(ms);
+  const longFmt = d.toLocaleString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const cap = longFmt.charAt(0).toUpperCase() + longFmt.slice(1);
+  const wr = formatWeekHistoryRange(e.weekStart);
+  const ws = computeThursday(e.weekStart);
+  const p1 = document.createElement("div");
+  p1.className = "histDetailPrimary";
+  p1.textContent = cap;
+  const p2 = document.createElement("div");
+  p2.className = "muted histDetailSub";
+  p2.textContent = `Semana jueves ${ws} (${wr}) · Tirada n.º ${e.tiradaNum}`;
+  detailEl.append(p1, p2);
+}
+
+function renderGenerationHistoryPanel(state) {
+  const sel = document.getElementById("histGenerationPick");
+  const filterEl = document.getElementById("histFilterDate");
+  const detail = document.getElementById("histGenerationDetail");
+  if (!sel || !detail) return;
+  const filterDay = filterEl ? clamp(filterEl.value) : "";
+  const list = getFilteredGenerationHistory(state, filterDay);
+  const prev = sel.value;
+  sel.replaceChildren();
+  sel.appendChild(new Option("— Elige una copia guardada —", ""));
+  for (const e of list) sel.appendChild(new Option(historyEntrySelectLabel(e), e.id));
+  if (prev && list.some((x) => x.id === prev)) sel.value = prev;
+  else sel.value = "";
+  updateGenerationHistoryDetail(state, detail, sel.value);
+}
+
+function applyHistoryEntryToSchedule(state, entry, assignSchedule) {
+  const ws = computeThursday(entry.weekStart);
+  const base = emptySchedule(ws);
+  const saved = entry.slots || {};
+  for (const sid of Object.keys(base.slots)) {
+    const snap = saved[sid];
+    if (!snap || typeof snap !== "object") continue;
+    base.slots[sid] = {
+      ...base.slots[sid],
+      modo: snap.modo === "TODOS" ? "TODOS" : "NORMAL",
+      asignadoA: norm(snap.asignadoA || ""),
+    };
+  }
+  state.schedulesByWeek[ws] = base;
+  state.weekStart = ws;
+  qs("weekStart").value = ws;
+  assignSchedule(base);
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
+    const parsedRemoval = uniq(
+      (Array.isArray(parsed.teamRemovedPersonKeys) ? parsed.teamRemovedPersonKeys : [])
+        .map((k) => normalizeKey(String(k)))
+        .filter(Boolean),
+    );
     const pinned = parsed.teamRosterPinned === true;
     let peopleSeed;
-    if (!Array.isArray(parsed.people) || parsed.people.length === 0) {
-      peopleSeed = [...DEFAULT_PEOPLE];
-    } else if (pinned) {
+    if (Array.isArray(parsed.people) && parsed.people.length > 0) {
       peopleSeed = [...parsed.people];
-    } else {
+    } else if (!Array.isArray(parsed.people)) {
+      peopleSeed = [...DEFAULT_PEOPLE];
+    } else if (!pinned) {
       /** Migración: antes la lista podía ser solo “extras”; una vez unimos con la plantilla. */
-      peopleSeed = sortNames(uniq([...DEFAULT_PEOPLE, ...parsed.people].map(fixName).filter(Boolean)));
+      peopleSeed = sortNames(uniq([...DEFAULT_PEOPLE, ...(parsed.people || [])].map(fixName).filter(Boolean)));
+    } else {
+      /** Equipo guardado pero vacío; no mezclamos la plantilla hasta sanitize. */
+      peopleSeed = [];
     }
     return sanitizeLocalState({
       teamRosterPinned: true,
+      teamRemovedPersonKeys: parsedRemoval,
       weekStart: computeThursday(parsed.weekStart),
       monthOffset: Number(parsed.monthOffset || 0),
       generationCounter: Number(parsed.generationCounter || 0),
@@ -734,10 +892,12 @@ function loadState() {
         ? parsed.vacationRanges.map((r) => ({ ...r, person: fixName(r.person), source: r.source || "manual" }))
         : [],
       schedulesByWeek: parsed.schedulesByWeek || {},
+      generationHistory: Array.isArray(parsed.generationHistory) ? parsed.generationHistory : [],
     });
   } catch {
     return sanitizeLocalState({
       teamRosterPinned: true,
+      teamRemovedPersonKeys: [],
       weekStart: computeThursday(),
       monthOffset: 0,
       generationCounter: 0,
@@ -745,6 +905,7 @@ function loadState() {
       vacAutoUrl: DEFAULT_VAC_SHEET_URL,
       vacationRanges: [],
       schedulesByWeek: {},
+      generationHistory: [],
     });
   }
 }
@@ -1022,13 +1183,12 @@ function init() {
   state.weekStart = computeThursday(state.weekStart);
   state.monthOffset = Number(state.monthOffset || 0);
   state.teamRosterPinned = true;
-  state.people = sortNames(uniq((state.people || []).map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
-  if (!state.people.length) state.people = [...DEFAULT_PEOPLE].filter((p) => !isExcludedPerson(p));
   state.vacAutoUrl = clamp(state.vacAutoUrl || DEFAULT_VAC_SHEET_URL);
   state.vacationRanges = Array.isArray(state.vacationRanges)
     ? state.vacationRanges.map((r) => ({ ...r, person: fixName(r.person), source: r.source || "manual" }))
     : [];
   state.schedulesByWeek = state.schedulesByWeek || {};
+  sanitizeLocalState(state);
 
   qs("weekStart").value = state.weekStart;
   qs("vacAutoUrl").value = state.vacAutoUrl;
@@ -1053,10 +1213,12 @@ function init() {
       persist("manual");
     });
     renderSummary(schedule);
+    renderGenerationHistoryPanel(state);
   };
 
   qs("btnGenerate").addEventListener("click", () => {
     generate(schedule, state);
+    pushGenerationHistory(state, schedule);
     rerender();
     persist("generar");
     status(`Turnos generados (tirada #${state.generationCounter}).`, "ok");
@@ -1114,30 +1276,35 @@ function init() {
   const runAutoVacationSync = async ({ silent = false } = {}) => {
     try {
       qs("btnSyncVacations").disabled = true;
-      const weekStartIso = state.weekStart;
-      const weekEndIso = toISO(addDays(parseISO(state.weekStart), 6));
       const rawUrl = clamp(qs("vacAutoUrl").value) || state.vacAutoUrl || DEFAULT_VAC_SHEET_URL;
       const csvUrl = csvUrlFromSheetUrl(rawUrl);
       if (!csvUrl) {
-        status("URL de Google Sheets no válida.", "warn");
-        return;
+        if (!silent) status("URL de Google Sheets no válida.", "warn");
+        return { ok: false, error: "url" };
       }
-      status("Leyendo vacaciones automáticas...", "warn");
+      if (!silent) status("Leyendo vacaciones automáticas...", "warn");
       const res = await fetch(csvUrl, { method: "GET" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const csvText = await res.text();
-      const autoRanges = extractAutoVacationRangesFromExportTable(csvText, state.people, weekStartIso, weekEndIso);
+      const autoRanges = extractAutoVacationRangesFromExportTable(
+        csvText,
+        state.people,
+        VAC_AUTO_FETCH_FROM_ISO,
+        VAC_AUTO_FETCH_TO_ISO,
+      );
       state.vacAutoUrl = rawUrl;
       qs("vacAutoUrl").value = rawUrl;
       const manualRanges = state.vacationRanges.filter((r) => (r.source || "manual") !== "auto");
       state.vacationRanges = [...manualRanges, ...autoRanges];
       rerender();
       persist("vacaciones auto");
-      const msg = `Vacaciones automáticas actualizadas para ${weekStartIso} a ${weekEndIso} (${autoRanges.length} rangos).`;
-      status(msg, "ok");
+      if (!silent)
+        status(`Vacaciones desde la hoja actualizadas (${autoRanges.length} rangos para el equipo visible).`, "ok");
+      return { ok: true, count: autoRanges.length };
     } catch (e) {
       const msg = `No se pudo actualizar vacaciones automáticas: ${e.message}`;
-      status(msg, "bad");
+      if (!silent) status(msg, "bad");
+      return { ok: false, error: e.message };
     } finally {
       qs("btnSyncVacations").disabled = false;
     }
@@ -1156,7 +1323,7 @@ function init() {
     persist("vacaciones");
   });
 
-  qs("btnTeamAdd").addEventListener("click", () => {
+  qs("btnTeamAdd").addEventListener("click", async () => {
     const raw = qs("teamNewPerson").value;
     const name = fixName(raw);
     if (!name) {
@@ -1172,11 +1339,25 @@ function init() {
       status("Ya está en el equipo.", "warn");
       return;
     }
+    state.teamRemovedPersonKeys = uniq(
+      (state.teamRemovedPersonKeys || []).map((k) => normalizeKey(String(k))).filter(Boolean).filter((k) => k !== nk),
+    ).slice(0, 200);
     state.people = sortNames(uniq([...state.people, name].map(fixName).filter(Boolean)));
     qs("teamNewPerson").value = "";
     rerender();
     persist("equipo añadir");
-    status(`${name} añadido al equipo.`, "ok");
+    const syn = await runAutoVacationSync({ silent: true });
+    if (!syn.ok) {
+      status(
+        `${name} añadido al equipo; no ha sido posible leer la hoja de vacaciones ahora. Comprueba la URL y pulsa «Actualizar vacaciones de forma automática».`,
+        "warn",
+      );
+      return;
+    }
+    status(
+      `${name} añadido. Se ha buscado en la hoja y actualizado todo el equipo: ${syn.count ?? 0} rangos vacaciones «automáticos» cargados.`,
+      "ok",
+    );
   });
 
   qs("btnTeamRemove").addEventListener("click", () => {
@@ -1185,13 +1366,25 @@ function init() {
       status("Elige alguien en el desplegable.", "warn");
       return;
     }
+    const pickK = normalizeKey(fixName(pick));
+    state.teamRemovedPersonKeys = uniq(
+      [...(state.teamRemovedPersonKeys || []).map((k) => normalizeKey(String(k))).filter(Boolean), pickK].filter(Boolean),
+    ).slice(0, 200);
+    const prevCount = state.people.length;
     purgePersonFromState(state, pick);
-    state.people = sortNames(state.people.filter((p) => normalizeKey(fixName(p)) !== normalizeKey(fixName(pick))));
+    state.people = sortNames(state.people.filter((p) => normalizeKey(fixName(p)) !== pickK));
     if (!state.people.length) {
-      state.people = [...DEFAULT_PEOPLE].filter((p) => !isExcludedPerson(p));
-      status("Equipo vacío; se ha restaurado la plantilla por defecto.", "warn");
+      const rk = new Set(state.teamRemovedPersonKeys);
+      state.people = sortNames(
+        uniq(DEFAULT_PEOPLE.map(fixName).filter(Boolean).filter((q) => !isExcludedPerson(q) && !rk.has(normalizeKey(q)))),
+      );
+    }
+    if (!state.people.length) {
+      status("No queda nadie activo: toda la plantilla está marcada como quitada a mano. Añade comerciales con «Nuevo comercial».", "warn");
+    } else if (prevCount <= 1) {
+      status(`${pick} quitado. Se ha vuelto a cargar la plantilla salvo quienes quitaste a mano; no volverán hasta que los añadas otra vez.`, "ok");
     } else {
-      status(`${pick} quitado del equipo.`, "ok");
+      status(`${pick} quitado del equipo. No se tendrá en cuenta ni en turnos ni en vacaciones automáticas hasta que lo añadas manualmente.`, "ok");
     }
     qs("teamRemovePerson").value = "";
     rerender();
@@ -1203,6 +1396,38 @@ function init() {
       ev.preventDefault();
       qs("btnTeamAdd").click();
     }
+  });
+
+  document.getElementById("histFilterDate")?.addEventListener("change", () => {
+    renderGenerationHistoryPanel(state);
+  });
+  document.getElementById("histFilterClear")?.addEventListener("click", () => {
+    const f = document.getElementById("histFilterDate");
+    if (f) f.value = "";
+    renderGenerationHistoryPanel(state);
+  });
+  document.getElementById("histGenerationPick")?.addEventListener("change", () => {
+    const detail = document.getElementById("histGenerationDetail");
+    const sel = document.getElementById("histGenerationPick");
+    if (detail && sel) updateGenerationHistoryDetail(state, detail, sel.value);
+  });
+  document.getElementById("btnHistRestore")?.addEventListener("click", () => {
+    const sel = document.getElementById("histGenerationPick");
+    if (!sel?.value) {
+      status("Elige una copia del historial.", "warn");
+      return;
+    }
+    const entry = findGenerationHistoryEntry(state, sel.value);
+    if (!entry) {
+      status("Entrada del historial no encontrada.", "warn");
+      return;
+    }
+    applyHistoryEntryToSchedule(state, entry, (base) => {
+      schedule = base;
+    });
+    rerender();
+    persist("restaurar historial");
+    status("Cuadrante restaurado desde el historial.", "ok");
   });
 
   rerender();

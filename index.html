@@ -13,10 +13,10 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260510h" />
+    <link rel="stylesheet" href="./styles.css?v=20260616a" />
     <meta name="color-scheme" content="light dark" />
     <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-    <script defer src="./app.js?v=20260509g"></script>
+    <script defer src="./app.js?v=20260616c"></script>
   </head>
   <body>
     <div class="app">
@@ -142,6 +142,36 @@
             </div>
           </section>
 
+        </section>
+
+        <section class="card cardTight historyGenPanel">
+          <div class="cardHeader">
+            <div>
+              <h2>Historial de generaciones</h2>
+              <p class="muted">
+                Cada vez que pulsas <strong>Generar</strong> se guarda una copia local con fecha y hora. Filtra por día si quieres y elige una copia para recuperarla en pantalla.
+              </p>
+            </div>
+          </div>
+          <div class="row rowTight compactRow">
+            <div class="control">
+              <label for="histFilterDate">Día del guardado</label>
+              <input id="histFilterDate" type="date" />
+            </div>
+            <div class="actions actionsBaseline">
+              <button id="histFilterClear" class="btn ghost" type="button">Ver todos los días</button>
+            </div>
+          </div>
+          <div class="row rowTight compactRow">
+            <div class="control controlStretch">
+              <label for="histGenerationPick">Copia guardada</label>
+              <select id="histGenerationPick"></select>
+            </div>
+            <div class="actions actionsBaseline">
+              <button id="btnHistRestore" class="btn primary" type="button">Restaurar en pantalla</button>
+            </div>
+          </div>
+          <div id="histGenerationDetail" class="histDetail" aria-live="polite"></div>
         </section>
 
         <section class="card">

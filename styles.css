@@ -40,6 +40,13 @@
   --ok: #27c07d;
   --warn: #ff845c;
   --bad: #ff5a6a;
+
+  /* Cuadrante: bloque «Semana» y cabecera de tabla — web vs imagen guardada */
+  --cuadranteHeaderBg: #2f4f78;
+  --cuadranteHeaderBgExport: #132943;
+  --cuadranteHeaderFg: #f8fafc;
+  --cuadranteHeaderMuted: rgba(248, 250, 252, 0.78);
+  --cuadranteHeaderBorder: rgba(255, 255, 255, 0.14);
 }
 
 * {
@@ -571,8 +578,30 @@ p {
 }
 
 #scheduleCapture.export-clean .scheduleTable thead th {
-  background: #f3f4f6 !important;
-  color: #374151 !important;
+  background: var(--cuadranteHeaderBgExport) !important;
+  color: var(--cuadranteHeaderFg) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.28) !important;
+}
+
+#scheduleCapture.export-clean .metaItem {
+  background: var(--cuadranteHeaderBgExport) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+#scheduleCapture.export-clean .metaLabel {
+  color: var(--cuadranteHeaderMuted) !important;
+}
+
+#scheduleCapture.export-clean #metaWeek .metaWeekLine {
+  color: var(--cuadranteHeaderFg) !important;
+}
+
+#scheduleCapture.export-clean #metaWeek .metaWeekMid {
+  color: rgba(248, 250, 252, 0.85) !important;
+}
+
+#scheduleCapture.export-clean .scheduleTable thead th .muted {
+  color: rgba(248, 250, 252, 0.82) !important;
 }
 
 #scheduleCapture.export-clean .scheduleTable th,
@@ -627,23 +656,23 @@ p {
   margin-bottom: 16px;
 }
 
-.metaItem {
+#scheduleCapture .metaItem {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 14px 18px;
   border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--bgSubtle);
+  border: 1px solid var(--cuadranteHeaderBorder);
+  background: var(--cuadranteHeaderBg);
   min-width: 0;
   max-width: 100%;
   width: 100%;
   align-items: center;
   text-align: center;
 }
-.metaLabel {
+#scheduleCapture .metaLabel {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--cuadranteHeaderMuted);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-weight: 800;
@@ -665,22 +694,15 @@ p {
 #metaWeek .metaWeekLine {
   display: block;
   font-weight: 800;
-  color: var(--text);
+  color: var(--cuadranteHeaderFg);
 }
 
 #metaWeek .metaWeekMid {
   font-size: 0.72em;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--cuadranteHeaderMuted);
   letter-spacing: 0.12em;
   text-transform: lowercase;
-}
-
-#scheduleCapture.export-clean #metaWeek .metaWeekLine {
-  color: #0f172a !important;
-}
-#scheduleCapture.export-clean #metaWeek .metaWeekMid {
-  color: #64748b !important;
 }
 
 .tableWrap {
@@ -707,13 +729,18 @@ p {
 .scheduleTable thead th {
   position: sticky;
   top: 0;
-  background: var(--bgSubtle);
+  background: var(--cuadranteHeaderBg);
   z-index: 1;
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--muted);
+  color: var(--cuadranteHeaderFg);
+  border-bottom: 1px solid var(--cuadranteHeaderBorder);
+}
+
+.capture .scheduleTable thead th .muted {
+  color: var(--cuadranteHeaderMuted);
 }
 
 .colDay {
@@ -902,6 +929,26 @@ p {
 .personChip.off {
   opacity: 0.5;
   text-decoration: line-through;
+}
+
+.historyGenPanel #histGenerationPick {
+  font-size: 13px;
+}
+.historyGenPanel .histDetail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  min-height: 2em;
+}
+.histDetailPrimary {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.histDetailSub {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .footer {
