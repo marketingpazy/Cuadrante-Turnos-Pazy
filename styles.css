@@ -42,8 +42,8 @@
   --bad: #ff5a6a;
 
   /* Cuadrante: bloque «Semana» y cabecera de tabla — web vs imagen guardada */
-  --cuadranteHeaderBg: #456a9e;
-  --cuadranteHeaderBgExport: #2a4f7a;
+  --cuadranteHeaderBg: var(--bg-page-mid);
+  --cuadranteHeaderBgExport: var(--bg-page-mid);
   --cuadranteHeaderFg: #f8fafc;
   --cuadranteHeaderMuted: rgba(248, 250, 252, 0.78);
   --cuadranteHeaderBorder: rgba(255, 255, 255, 0.14);
@@ -590,11 +590,6 @@ p {
   border-color: rgba(255, 255, 255, 0.22) !important;
 }
 
-#scheduleCapture.export-clean .captureBrand {
-  background: var(--cuadranteHeaderBgExport) !important;
-  border-color: rgba(255, 255, 255, 0.22) !important;
-}
-
 #scheduleCapture.export-clean .captureBrandTitle {
   color: var(--cuadranteHeaderFg) !important;
 }
@@ -665,33 +660,28 @@ p {
 }
 
 .scheduleMeta {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
+  display: block;
   margin-bottom: 16px;
 }
 
 #scheduleCapture .captureBrand {
-  min-width: 190px;
-  border-radius: 16px;
-  border: 1px solid var(--cuadranteHeaderBorder);
-  background: var(--cuadranteHeaderBg);
-  padding: 12px 14px;
+  min-width: 0;
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
+  justify-content: flex-start;
 }
 
 #scheduleCapture .captureBrandLogo {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 14px;
   display: block;
 }
 
 #scheduleCapture .captureBrandTitle {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 800;
   line-height: 1.15;
   color: var(--cuadranteHeaderFg);
@@ -699,7 +689,7 @@ p {
 
 #scheduleCapture .captureBrandSub {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--cuadranteHeaderMuted);
 }
@@ -717,6 +707,22 @@ p {
   width: 100%;
   align-items: center;
   text-align: center;
+}
+#scheduleCapture .metaItemWithBrand {
+  display: grid;
+  grid-template-columns: minmax(210px, 260px) 1fr minmax(210px, 260px);
+  gap: 12px;
+  align-items: center;
+}
+#scheduleCapture .metaWeekWrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#scheduleCapture .captureBrandSpacer {
+  width: 100%;
+  visibility: hidden;
 }
 #scheduleCapture .metaLabel {
   font-size: 13px;
@@ -927,13 +933,14 @@ p {
 }
 
 @media (max-width: 700px) {
-  #scheduleCapture .scheduleMeta {
+  #scheduleCapture .metaItemWithBrand {
     grid-template-columns: 1fr;
   }
-
   #scheduleCapture .captureBrand {
-    min-width: 0;
     justify-content: center;
+  }
+  #scheduleCapture .captureBrandSpacer {
+    display: none;
   }
 }
 
