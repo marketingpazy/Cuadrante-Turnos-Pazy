@@ -99,8 +99,9 @@ function isExcludedPerson(name) {
 
 /** Limpia listas y cuadrantes guardados para que no queden excluid@s. */
 function sanitizeLocalState(state) {
+  state.teamRosterPinned = true;
   state.people = sortNames(uniq((state.people || DEFAULT_PEOPLE).map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
-  if (!state.people.length) state.people = [...DEFAULT_PEOPLE];
+  if (!state.people.length) state.people = [...DEFAULT_PEOPLE].filter((p) => !isExcludedPerson(p));
 
   state.vacationRanges = Array.isArray(state.vacationRanges)
     ? state.vacationRanges.filter((r) => !isExcludedPerson(r.person))
@@ -119,10 +120,10 @@ function sanitizeLocalState(state) {
   return state;
 }
 
-/** Todos los comerciales en desplegables: lista base + cualquier nombre extra guardado en estado. */
+/** Lista activa de comerciales (única fuente para desplegables y generación). */
 function allVentasForDropdown(state) {
-  const extra = Array.isArray(state.people) ? state.people : [];
-  return sortNames(uniq([...DEFAULT_PEOPLE, ...extra].map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
+  const list = Array.isArray(state.people) ? state.people : [];
+  return sortNames(uniq(list.map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
 }
 
 function normalizeKey(s) {
@@ -130,6 +131,32 @@ function normalizeKey(s) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function purgePersonFromState(state, personDisplayName) {
+  const k = normalizeKey(fixName(personDisplayName));
+  if (!k) return;
+  state.vacationRanges = (state.vacationRanges || []).filter((r) => normalizeKey(fixName(r.person)) !== k);
+  const weeks = state.schedulesByWeek || {};
+  for (const ws of Object.keys(weeks)) {
+    const sch = weeks[ws];
+    if (!sch?.slots) continue;
+    for (const id of Object.keys(sch.slots)) {
+      const sl = sch.slots[id];
+      if (!sl?.asignadoA) continue;
+      if (normalizeKey(fixName(sl.asignadoA)) !== k) continue;
+      sch.slots[id] = { ...sl, asignadoA: "" };
+    }
+  }
+}
+
+function renderTeamPanel(state) {
+  const sel = document.getElementById("teamRemovePerson");
+  if (!sel) return;
+  const list = allVentasForDropdown(state);
+  sel.innerHTML = "";
+  sel.appendChild(new Option("— Elige comercial —", ""));
+  for (const p of list) sel.appendChild(new Option(p, p));
 }
 
 function parseSheetRef(url) {
@@ -686,11 +713,22 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
+    const pinned = parsed.teamRosterPinned === true;
+    let peopleSeed;
+    if (!Array.isArray(parsed.people) || parsed.people.length === 0) {
+      peopleSeed = [...DEFAULT_PEOPLE];
+    } else if (pinned) {
+      peopleSeed = [...parsed.people];
+    } else {
+      /** Migración: antes la lista podía ser solo “extras”; una vez unimos con la plantilla. */
+      peopleSeed = sortNames(uniq([...DEFAULT_PEOPLE, ...parsed.people].map(fixName).filter(Boolean)));
+    }
     return sanitizeLocalState({
+      teamRosterPinned: true,
       weekStart: computeThursday(parsed.weekStart),
       monthOffset: Number(parsed.monthOffset || 0),
       generationCounter: Number(parsed.generationCounter || 0),
-      people: sortNames(uniq((parsed.people || DEFAULT_PEOPLE).map(fixName).filter(Boolean))),
+      people: sortNames(uniq(peopleSeed.map(fixName).filter(Boolean))),
       vacAutoUrl: clamp(parsed.vacAutoUrl || DEFAULT_VAC_SHEET_URL),
       vacationRanges: Array.isArray(parsed.vacationRanges)
         ? parsed.vacationRanges.map((r) => ({ ...r, person: fixName(r.person), source: r.source || "manual" }))
@@ -699,6 +737,7 @@ function loadState() {
     });
   } catch {
     return sanitizeLocalState({
+      teamRosterPinned: true,
       weekStart: computeThursday(),
       monthOffset: 0,
       generationCounter: 0,
@@ -742,8 +781,7 @@ function availableForDate(people, vacByIso, iso) {
 function renderVacationControls(state) {
   const sel = qs("vacPerson");
   sel.innerHTML = "";
-  for (const p of state.people) {
-    if (isExcludedPerson(p)) continue;
+  for (const p of allVentasForDropdown(state)) {
     const opt = document.createElement("option");
     opt.value = p;
     opt.textContent = p;
@@ -831,6 +869,7 @@ function renderSummary(schedule) {
 
 function renderTable(schedule, state, onChange) {
   const ventas = allVentasForDropdown(state);
+  const allowedKeys = new Set(ventas.map((p) => normalizeKey(p)));
   const tbody = qs("scheduleBody");
   tbody.innerHTML = "";
   for (const day of weekFrom(schedule.weekStart)) {
@@ -850,6 +889,15 @@ function renderTable(schedule, state, onChange) {
         const id = slotId(day.iso, franja.key, tipo.key);
         let cur = schedule.slots[id];
         if (cur && isExcludedPerson(cur.asignadoA)) {
+          cur = { ...cur, asignadoA: "" };
+          schedule.slots[id] = cur;
+        }
+        if (
+          cur
+          && cur.modo !== "TODOS"
+          && norm(cur.asignadoA)
+          && !allowedKeys.has(normalizeKey(fixName(cur.asignadoA)))
+        ) {
           cur = { ...cur, asignadoA: "" };
           schedule.slots[id] = cur;
         }
@@ -973,8 +1021,9 @@ function init() {
   const state = loadState();
   state.weekStart = computeThursday(state.weekStart);
   state.monthOffset = Number(state.monthOffset || 0);
-  state.people = sortNames(uniq((state.people || DEFAULT_PEOPLE).map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
-  if (!state.people.length) state.people = [...DEFAULT_PEOPLE];
+  state.teamRosterPinned = true;
+  state.people = sortNames(uniq((state.people || []).map(fixName).filter(Boolean).filter((p) => !isExcludedPerson(p))));
+  if (!state.people.length) state.people = [...DEFAULT_PEOPLE].filter((p) => !isExcludedPerson(p));
   state.vacAutoUrl = clamp(state.vacAutoUrl || DEFAULT_VAC_SHEET_URL);
   state.vacationRanges = Array.isArray(state.vacationRanges)
     ? state.vacationRanges.map((r) => ({ ...r, person: fixName(r.person), source: r.source || "manual" }))
@@ -993,6 +1042,7 @@ function init() {
   };
 
   const rerender = () => {
+    renderTeamPanel(state);
     renderVacationControls(state);
     renderVacationsThisWeek(state);
     renderCalendar(state);
@@ -1104,6 +1154,55 @@ function init() {
     state.vacationRanges = state.vacationRanges.filter((x) => !(x.person === person && x.from === from && x.to === to));
     rerender();
     persist("vacaciones");
+  });
+
+  qs("btnTeamAdd").addEventListener("click", () => {
+    const raw = qs("teamNewPerson").value;
+    const name = fixName(raw);
+    if (!name) {
+      status("Escribe un nombre.", "warn");
+      return;
+    }
+    if (isExcludedPerson(name)) {
+      status("Ese nombre no se puede usar en el equipo.", "warn");
+      return;
+    }
+    const nk = normalizeKey(name);
+    if (state.people.some((p) => normalizeKey(fixName(p)) === nk)) {
+      status("Ya está en el equipo.", "warn");
+      return;
+    }
+    state.people = sortNames(uniq([...state.people, name].map(fixName).filter(Boolean)));
+    qs("teamNewPerson").value = "";
+    rerender();
+    persist("equipo añadir");
+    status(`${name} añadido al equipo.`, "ok");
+  });
+
+  qs("btnTeamRemove").addEventListener("click", () => {
+    const pick = clamp(qs("teamRemovePerson").value);
+    if (!pick) {
+      status("Elige alguien en el desplegable.", "warn");
+      return;
+    }
+    purgePersonFromState(state, pick);
+    state.people = sortNames(state.people.filter((p) => normalizeKey(fixName(p)) !== normalizeKey(fixName(pick))));
+    if (!state.people.length) {
+      state.people = [...DEFAULT_PEOPLE].filter((p) => !isExcludedPerson(p));
+      status("Equipo vacío; se ha restaurado la plantilla por defecto.", "warn");
+    } else {
+      status(`${pick} quitado del equipo.`, "ok");
+    }
+    qs("teamRemovePerson").value = "";
+    rerender();
+    persist("equipo quitar");
+  });
+
+  document.getElementById("teamNewPerson")?.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      qs("btnTeamAdd").click();
+    }
   });
 
   rerender();
