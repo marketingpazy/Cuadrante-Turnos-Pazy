@@ -669,19 +669,19 @@ p {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   justify-content: flex-start;
 }
 
 #scheduleCapture .captureBrandLogo {
-  width: 56px;
-  height: 56px;
+  width: 62px;
+  height: 62px;
   border-radius: 14px;
   display: block;
 }
 
 #scheduleCapture .captureBrandTitle {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.15;
   color: var(--cuadranteHeaderFg);
@@ -689,7 +689,7 @@ p {
 
 #scheduleCapture .captureBrandSub {
   margin-top: 4px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--cuadranteHeaderMuted);
 }
@@ -710,24 +710,26 @@ p {
 }
 #scheduleCapture .metaItemWithBrand {
   display: grid;
-  grid-template-columns: minmax(210px, 260px) 1fr minmax(210px, 260px);
-  gap: 12px;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: 26px;
   align-items: center;
 }
 #scheduleCapture .metaWeekWrap {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
+  justify-self: end;
+  text-align: right;
+  padding-right: 8px;
 }
 #scheduleCapture .captureBrandSpacer {
-  width: 100%;
-  visibility: hidden;
+  display: none;
 }
 #scheduleCapture .metaLabel {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--cuadranteHeaderMuted);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 800;
 }
@@ -739,9 +741,10 @@ p {
 #metaWeek {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  font-size: clamp(18px, 2.1vw, 24px);
+  align-items: flex-end;
+  text-align: right;
+  gap: 9px;
+  font-size: clamp(20px, 2.3vw, 30px);
   line-height: 1.38;
 }
 
@@ -939,8 +942,10 @@ p {
   #scheduleCapture .captureBrand {
     justify-content: center;
   }
-  #scheduleCapture .captureBrandSpacer {
-    display: none;
+  #scheduleCapture .metaWeekWrap,
+  #metaWeek {
+    align-items: center;
+    text-align: center;
   }
 }
 
