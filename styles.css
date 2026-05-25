@@ -6,20 +6,33 @@
   --pazy: #00bfc8;
   --pazy2: #18aeb7;
   --pazyDark: #0a7e92;
-  --pazySoft: rgba(0, 198, 204, 0.14);
+  --pazySoft: rgba(0, 198, 204, 0.22);
 
-  /* Tema elegante sobre blanco */
-  --bg: #ffffff;
-  --bgSubtle: #f8fafc;
-  --panel: rgba(255, 255, 255, 0.95);
+  /* Fondo página (azul oscuro suave) vs superficies en blanco */
+  --bg-page: #17243a;
+  --bg-page-mid: #152238;
+  --bg-page-deep: #111b2e;
+  --page-fg: #e8eef8;
+  --page-muted: #9eb3d6;
+
+  --ink: #0f172a;
+  --ink-muted: #64748b;
+
+  --text: var(--ink);
+  --muted: var(--ink-muted);
+
+  --bg: var(--bg-page-mid);
+  --bgSubtle: #f1f5f9;
+  --panel: #ffffff;
   --panel2: #ffffff;
-  --text: #0f172a;
-  --muted: #64748b;
+
   --border: #e8edf3;
-  --border-strong: #d8dee8;
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow: 0 4px 16px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
-  --shadow-float: 0 12px 40px rgba(15, 23, 42, 0.08);
+  --border-strong: #cfd8e8;
+  --border-page: rgba(255, 255, 255, 0.1);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow: 0 4px 22px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.28);
 
   --radius: 18px;
   --radius2: 14px;
@@ -42,11 +55,12 @@ body {
 body {
   margin: 0;
   font-family: var(--fontMain);
-  color: var(--text);
-  background-color: var(--bg);
+  color: var(--page-fg);
+  background-color: var(--bg-page-deep);
   background-image:
-    radial-gradient(ellipse 90% 60% at 50% -20%, rgba(0, 191, 200, 0.08), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(10, 126, 146, 0.05), transparent 45%);
+    radial-gradient(ellipse 110% 70% at 50% -25%, rgba(56, 120, 180, 0.22), transparent 58%),
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(0, 191, 200, 0.06), transparent 52%),
+    linear-gradient(180deg, var(--bg-page) 0%, var(--bg-page-mid) 42%, var(--bg-page-deep) 100%);
   background-attachment: fixed;
   line-height: 1.45;
 }
@@ -63,7 +77,7 @@ body {
   justify-content: space-between;
   gap: 16px;
   padding: 8px 0 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-page);
   margin-bottom: 4px;
 }
 
@@ -87,6 +101,8 @@ body {
   border-radius: 14px;
   display: block;
   box-shadow: var(--shadow-sm);
+  outline: 1px solid rgba(255, 255, 255, 0.12);
+  outline-offset: 0;
 }
 
 .brandTitle {
@@ -94,11 +110,11 @@ body {
   letter-spacing: -0.02em;
   font-size: 20px;
   line-height: 1.15;
-  color: var(--text);
+  color: var(--page-fg);
 }
 .brandSub {
   font-weight: 600;
-  color: var(--muted);
+  color: var(--page-muted);
   font-size: 13px;
   margin-top: 4px;
   letter-spacing: 0.02em;
@@ -300,7 +316,7 @@ body {
   border: 1px solid var(--border);
   padding: 8px 10px;
   border-radius: 12px;
-  background: var(--bg);
+  background: var(--panel2);
 }
 
 .linkBtn:hover {
@@ -451,8 +467,9 @@ textarea:focus {
 }
 
 .card {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   background: var(--panel2);
+  color: var(--text);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
@@ -470,18 +487,30 @@ h2 {
   font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--text);
+  color: var(--page-fg);
 }
 h3 {
   margin: 0;
   font-size: 15px;
 }
+.card h2 {
+  color: var(--text);
+}
 p {
   margin: 8px 0 0;
+  color: var(--page-muted);
+}
+.card p,
+.capture p {
   color: var(--muted);
 }
 
 .muted {
+  color: var(--page-muted);
+}
+.card .muted,
+.capture .muted,
+.cardHeader .muted {
   color: var(--muted);
 }
 .statusRow {
@@ -491,8 +520,9 @@ p {
   font-size: 12px;
   padding: 8px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bgSubtle);
+  border: 1px solid var(--border-page);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--page-muted);
 }
 .status.ok {
   border-color: rgba(39, 192, 125, 0.45);
@@ -517,6 +547,9 @@ p {
   border-radius: var(--radius2);
   padding: 20px;
   box-shadow: var(--shadow-sm);
+}
+.capture .muted {
+  color: var(--muted);
 }
 
 #scheduleCapture.export-clean {
@@ -874,8 +907,8 @@ p {
 .footer {
   margin-top: 28px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-page);
   font-size: 12px;
   text-align: center;
-  color: var(--muted);
+  color: var(--page-muted);
 }
