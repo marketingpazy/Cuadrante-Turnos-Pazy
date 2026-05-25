@@ -157,6 +157,10 @@ function sanitizeLocalState(state) {
   }
   state.generationHistory = state.generationHistory
     .filter((h) => h && h.id && typeof h.weekStart === "string" && h.savedAt && h.slots && typeof h.slots === "object")
+    .map((h) => ({
+      ...h,
+      memo: typeof h.memo === "string" ? clamp(h.memo).slice(0, 200) : "",
+    }))
     .sort((a, b) => (Number(b.savedAtMs) || 0) - (Number(a.savedAtMs) || 0))
     .slice(0, MAX_GENERATION_HISTORY);
 
@@ -756,6 +760,7 @@ function pushGenerationHistory(state, schedule) {
     weekStart: schedule.weekStart,
     tiradaNum: Number(state.generationCounter || 0),
     slots: JSON.parse(JSON.stringify(schedule.slots)),
+    memo: "",
   };
   state.generationHistory = [entry, ...hist].slice(0, MAX_GENERATION_HISTORY);
 }
@@ -782,61 +787,139 @@ function formatWeekHistoryRange(weekStartIso) {
   }
 }
 
-function historyEntrySelectLabel(e) {
-  const ms = Number(e.savedAtMs) || new Date(e.savedAt).getTime();
-  const d = new Date(ms);
-  const dayPart = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-  const timePart = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  const wr = formatWeekHistoryRange(e.weekStart);
-  return `${dayPart} ${timePart} · ${wr} · #${e.tiradaNum}`;
-}
-
 function findGenerationHistoryEntry(state, id) {
   if (!id) return null;
   return (state.generationHistory || []).find((x) => x.id === id) || null;
 }
 
-function updateGenerationHistoryDetail(state, detailEl, entryId) {
-  detailEl.replaceChildren();
-  const e = findGenerationHistoryEntry(state, entryId);
-  if (!e) return;
+function deleteHistoryEntry(state, id) {
+  state.generationHistory = (state.generationHistory || []).filter((x) => x.id !== id);
+}
+
+function saveHistoryEntryMemo(state, id, memo) {
+  const entry = findGenerationHistoryEntry(state, id);
+  if (!entry) return;
+  entry.memo = clamp(memo).slice(0, 200);
+}
+
+function overwriteGenerationHistoryFromSchedule(state, id, schedule) {
+  const entry = findGenerationHistoryEntry(state, id);
+  if (!entry) return false;
+  if (computeThursday(schedule.weekStart) !== computeThursday(entry.weekStart)) return false;
+  entry.slots = JSON.parse(JSON.stringify(schedule.slots));
+  entry.lastEditedMs = Date.now();
+  return true;
+}
+
+function formatHistoryClockLine(ms) {
+  const d = new Date(Number(ms));
+  return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}
+
+function buildHistoryEntryRow(e) {
+  const row = document.createElement("div");
+  row.className = "histEntryRow";
   const ms = Number(e.savedAtMs) || new Date(e.savedAt).getTime();
-  const d = new Date(ms);
-  const longFmt = d.toLocaleString("es-ES", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const cap = longFmt.charAt(0).toUpperCase() + longFmt.slice(1);
-  const wr = formatWeekHistoryRange(e.weekStart);
-  const ws = computeThursday(e.weekStart);
-  const p1 = document.createElement("div");
-  p1.className = "histDetailPrimary";
-  p1.textContent = cap;
-  const p2 = document.createElement("div");
-  p2.className = "muted histDetailSub";
-  p2.textContent = `Semana jueves ${ws} (${wr}) · Tirada n.º ${e.tiradaNum}`;
-  detailEl.append(p1, p2);
+
+  const head = document.createElement("div");
+  head.className = "histEntryHead";
+  const timeEl = document.createElement("strong");
+  timeEl.className = "histEntryClock";
+  timeEl.textContent = formatHistoryClockLine(ms);
+  head.appendChild(timeEl);
+
+  const meta = document.createElement("span");
+  meta.className = "muted histEntryMeta";
+  const wsThu = computeThursday(e.weekStart);
+  meta.textContent = ` · Sem. ${formatWeekHistoryRange(e.weekStart)} (jue. ${wsThu}) · tirada #${e.tiradaNum}`;
+  if (e.lastEditedMs) {
+    const ed = formatHistoryClockLine(e.lastEditedMs);
+    meta.appendChild(document.createTextNode(` · contenido tocado (${ed})`));
+  }
+  head.appendChild(meta);
+  row.appendChild(head);
+
+  const memo = document.createElement("textarea");
+  memo.className = "histMemoInput";
+  memo.rows = 2;
+  memo.maxLength = 200;
+  memo.placeholder = "Nota sobre esta copia (opcional)";
+  memo.value = typeof e.memo === "string" ? e.memo : "";
+  memo.dataset.histId = e.id;
+  row.appendChild(memo);
+
+  const actions = document.createElement("div");
+  actions.className = "histEntryActions";
+
+  function mk(label, cls, action) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = cls;
+    b.textContent = label;
+    b.dataset.histAction = action;
+    b.dataset.histId = e.id;
+    actions.appendChild(b);
+  }
+
+  mk("Restaurar en pantalla", "btn primary histAct", "restore");
+  mk("Guardar tabla actual en esta copia", "btn histAct", "overwrite");
+  mk("Eliminar copia", "btn ghost histAct", "delete");
+  row.appendChild(actions);
+
+  return row;
 }
 
 function renderGenerationHistoryPanel(state) {
-  const sel = document.getElementById("histGenerationPick");
+  const badge = document.getElementById("histCountBadge");
+  const wrap = document.getElementById("histByDayWrap");
   const filterEl = document.getElementById("histFilterDate");
-  const detail = document.getElementById("histGenerationDetail");
-  if (!sel || !detail) return;
+  if (!wrap) return;
+
+  const all = Array.isArray(state.generationHistory) ? state.generationHistory : [];
+  if (badge) badge.textContent = String(all.length);
+
   const filterDay = filterEl ? clamp(filterEl.value) : "";
   const list = getFilteredGenerationHistory(state, filterDay);
-  const prev = sel.value;
-  sel.replaceChildren();
-  sel.appendChild(new Option("— Elige una copia guardada —", ""));
-  for (const e of list) sel.appendChild(new Option(historyEntrySelectLabel(e), e.id));
-  if (prev && list.some((x) => x.id === prev)) sel.value = prev;
-  else sel.value = "";
-  updateGenerationHistoryDetail(state, detail, sel.value);
+  wrap.replaceChildren();
+
+  if (!list.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = filterDay
+      ? "No hay copias guardadas en ese día (prueba otro día o borra el filtro)."
+      : 'Pulsa «Generar» para guardar aquí cada tirada con fecha y hora. Abre esta zona con «Historial de generados».';
+    wrap.appendChild(empty);
+    return;
+  }
+
+  const byDay = new Map();
+  for (const entry of list) {
+    const ms = Number(entry.savedAtMs) || new Date(entry.savedAt).getTime();
+    const dayKey = toISO(new Date(ms));
+    if (!byDay.has(dayKey)) byDay.set(dayKey, []);
+    byDay.get(dayKey).push(entry);
+  }
+
+  const days = [...byDay.keys()].sort((a, b) => b.localeCompare(a));
+  for (const dayKey of days) {
+    const entries = byDay.get(dayKey).sort((a, b) => (Number(b.savedAtMs) || 0) - (Number(a.savedAtMs) || 0));
+
+    const details = document.createElement("details");
+    details.className = "histDayBlock";
+    details.open = true;
+
+    const summ = document.createElement("summary");
+    const parsed = parseISO(dayKey);
+    summ.textContent = parsed ? formatDayLineSpanish(parsed) : dayKey;
+    details.appendChild(summ);
+
+    const listEl = document.createElement("div");
+    listEl.className = "histEntriesList";
+    for (const e of entries) listEl.appendChild(buildHistoryEntryRow(e));
+
+    details.appendChild(listEl);
+    wrap.appendChild(details);
+  }
 }
 
 function applyHistoryEntryToSchedule(state, entry, assignSchedule) {
@@ -1398,6 +1481,26 @@ function init() {
     }
   });
 
+  const histPanel = document.getElementById("panelHistorialGeneraciones");
+
+  function toggleHistorialPanel() {
+    const p = histPanel;
+    const tBtn = document.getElementById("btnHistorialToggle");
+    if (!p || !tBtn) return;
+    const willOpen = p.hidden;
+    p.hidden = !willOpen;
+    tBtn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    renderGenerationHistoryPanel(state);
+    if (willOpen) requestAnimationFrame(() => p.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  }
+
+  document.getElementById("btnHistorialToggle")?.addEventListener("click", toggleHistorialPanel);
+  document.getElementById("btnHistorialClose")?.addEventListener("click", () => {
+    const tBtn = document.getElementById("btnHistorialToggle");
+    if (histPanel) histPanel.hidden = true;
+    tBtn?.setAttribute("aria-expanded", "false");
+  });
+
   document.getElementById("histFilterDate")?.addEventListener("change", () => {
     renderGenerationHistoryPanel(state);
   });
@@ -1406,29 +1509,63 @@ function init() {
     if (f) f.value = "";
     renderGenerationHistoryPanel(state);
   });
-  document.getElementById("histGenerationPick")?.addEventListener("change", () => {
-    const detail = document.getElementById("histGenerationDetail");
-    const sel = document.getElementById("histGenerationPick");
-    if (detail && sel) updateGenerationHistoryDetail(state, detail, sel.value);
-  });
-  document.getElementById("btnHistRestore")?.addEventListener("click", () => {
-    const sel = document.getElementById("histGenerationPick");
-    if (!sel?.value) {
-      status("Elige una copia del historial.", "warn");
+
+  histPanel?.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-hist-action]");
+    if (!btn) return;
+    const id = btn.dataset.histId;
+    const action = btn.dataset.histAction;
+    if (!id || !action) return;
+
+    if (action === "restore") {
+      const entry = findGenerationHistoryEntry(state, id);
+      if (!entry) {
+        status("Esa copia ya no existe.", "warn");
+        return;
+      }
+      applyHistoryEntryToSchedule(state, entry, (base) => {
+        schedule = base;
+      });
+      rerender();
+      persist("restaurar historial");
+      status("Cuadrante restaurado desde el historial.", "ok");
       return;
     }
-    const entry = findGenerationHistoryEntry(state, sel.value);
-    if (!entry) {
-      status("Entrada del historial no encontrada.", "warn");
+
+    if (action === "delete") {
+      deleteHistoryEntry(state, id);
+      persist("historial borrar");
+      renderGenerationHistoryPanel(state);
+      status("Copia eliminada del historial.", "ok");
       return;
     }
-    applyHistoryEntryToSchedule(state, entry, (base) => {
-      schedule = base;
-    });
-    rerender();
-    persist("restaurar historial");
-    status("Cuadrante restaurado desde el historial.", "ok");
+
+    if (action === "overwrite") {
+      if (!overwriteGenerationHistoryFromSchedule(state, id, schedule)) {
+        status(
+          "La copia del historial es de otra semana que el cuadrante en pantalla. Ajusta el jueves de inicio o restaura esa copia primero.",
+          "warn",
+        );
+        return;
+      }
+      persist("historial sustituir");
+      renderGenerationHistoryPanel(state);
+      status("Esta copia del historial ahora coincide con los turnos de la tabla.", "ok");
+    }
   });
+
+  histPanel?.addEventListener(
+    "blur",
+    (ev) => {
+      const tg = ev.target;
+      if (!tg?.classList?.contains?.("histMemoInput")) return;
+      const hid = tg.dataset.histId;
+      if (!hid) return;
+      saveHistoryEntryMemo(state, hid, tg.value);
+      persist("historial nota");
+    },
+    true,
+  );
 
   rerender();
   persist("inicio");

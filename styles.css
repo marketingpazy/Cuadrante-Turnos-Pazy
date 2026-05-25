@@ -42,8 +42,8 @@
   --bad: #ff5a6a;
 
   /* Cuadrante: bloque «Semana» y cabecera de tabla — web vs imagen guardada */
-  --cuadranteHeaderBg: #2f4f78;
-  --cuadranteHeaderBgExport: #132943;
+  --cuadranteHeaderBg: #456a9e;
+  --cuadranteHeaderBgExport: #2a4f7a;
   --cuadranteHeaderFg: #f8fafc;
   --cuadranteHeaderMuted: rgba(248, 250, 252, 0.78);
   --cuadranteHeaderBorder: rgba(255, 255, 255, 0.14);
@@ -581,11 +581,26 @@ p {
   background: var(--cuadranteHeaderBgExport) !important;
   color: var(--cuadranteHeaderFg) !important;
   border-bottom-color: rgba(255, 255, 255, 0.28) !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
 }
 
 #scheduleCapture.export-clean .metaItem {
   background: var(--cuadranteHeaderBgExport) !important;
   border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+#scheduleCapture.export-clean .captureBrand {
+  background: var(--cuadranteHeaderBgExport) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+#scheduleCapture.export-clean .captureBrandTitle {
+  color: var(--cuadranteHeaderFg) !important;
+}
+
+#scheduleCapture.export-clean .captureBrandSub {
+  color: var(--cuadranteHeaderMuted) !important;
 }
 
 #scheduleCapture.export-clean .metaLabel {
@@ -602,6 +617,8 @@ p {
 
 #scheduleCapture.export-clean .scheduleTable thead th .muted {
   color: rgba(248, 250, 252, 0.82) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
 }
 
 #scheduleCapture.export-clean .scheduleTable th,
@@ -648,12 +665,43 @@ p {
 }
 
 .scheduleMeta {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
+  align-items: stretch;
   margin-bottom: 16px;
+}
+
+#scheduleCapture .captureBrand {
+  min-width: 190px;
+  border-radius: 16px;
+  border: 1px solid var(--cuadranteHeaderBorder);
+  background: var(--cuadranteHeaderBg);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#scheduleCapture .captureBrandLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: block;
+}
+
+#scheduleCapture .captureBrandTitle {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--cuadranteHeaderFg);
+}
+
+#scheduleCapture .captureBrandSub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cuadranteHeaderMuted);
 }
 
 #scheduleCapture .metaItem {
@@ -671,7 +719,7 @@ p {
   text-align: center;
 }
 #scheduleCapture .metaLabel {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--cuadranteHeaderMuted);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -687,7 +735,7 @@ p {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  font-size: clamp(17px, 2vw, 22px);
+  font-size: clamp(18px, 2.1vw, 24px);
   line-height: 1.38;
 }
 
@@ -731,16 +779,22 @@ p {
   top: 0;
   background: var(--cuadranteHeaderBg);
   z-index: 1;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--cuadranteHeaderFg);
   border-bottom: 1px solid var(--cuadranteHeaderBorder);
+  line-height: 1.35;
+  padding-top: 11px;
+  padding-bottom: 11px;
 }
 
 .capture .scheduleTable thead th .muted {
   color: var(--cuadranteHeaderMuted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .colDay {
@@ -872,6 +926,17 @@ p {
   }
 }
 
+@media (max-width: 700px) {
+  #scheduleCapture .scheduleMeta {
+    grid-template-columns: 1fr;
+  }
+
+  #scheduleCapture .captureBrand {
+    min-width: 0;
+    justify-content: center;
+  }
+}
+
 .historyWrap,
 .summaryWrap {
   overflow: auto;
@@ -931,24 +996,82 @@ p {
   text-decoration: line-through;
 }
 
-.historyGenPanel #histGenerationPick {
-  font-size: 13px;
+.histTriggerWrap {
+  align-items: flex-start;
 }
-.historyGenPanel .histDetail {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  min-height: 2em;
+.histTriggerBtn {
+  align-self: flex-start;
 }
-.histDetailPrimary {
-  font-weight: 700;
-  font-size: 15px;
+.histTriggerHint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.historyGenPanel {
+  scroll-margin-top: 12px;
+}
+.histByDayWrap {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.histDayBlock {
+  border: 1px solid var(--border);
+  border-radius: var(--radius2);
+  overflow: hidden;
+  background: var(--panel);
+}
+.histDayBlock > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 14px;
+  font-weight: 800;
+  background: var(--bgSubtle);
   color: var(--text);
 }
-.histDetailSub {
-  margin-top: 6px;
+.histDayBlock > summary::-webkit-details-marker {
+  display: none;
+}
+.histEntriesList {
+  padding: 8px 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.histEntryRow {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fafbfc;
+}
+.histEntryHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-bottom: 8px;
+}
+.histEntryClock {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.histMemoInput {
+  width: 100%;
+  resize: vertical;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  padding: 8px 10px;
+  font-family: inherit;
   font-size: 13px;
-  line-height: 1.4;
+}
+.histEntryActions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .footer {
