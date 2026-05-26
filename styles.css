@@ -673,6 +673,7 @@ p {
   gap: 16px;
   justify-content: flex-start;
   overflow: visible;
+  padding-left: 8px;
 }
 
 #scheduleCapture .captureBrandLogo {
@@ -719,7 +720,7 @@ p {
   grid-template-columns: minmax(300px, 420px) 1fr;
   gap: 30px;
   align-items: center;
-  padding: 8px 16px 8px 14px;
+  padding: 8px 16px 8px 26px;
 }
 #scheduleCapture .metaWeekWrap {
   min-width: 0;
