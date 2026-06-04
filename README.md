@@ -21,6 +21,31 @@ Al subirlo, se crearán estas pestañas (tal cual las espera la web y el Apps Sc
 - `tipo` es una de: `FIJO`, `BACKUP`.
 - `modo` es: `NORMAL` o `TODOS` (si está `TODOS`, la casilla no asigna personas).
 
+## Hoja central de guardias (Google Sheets fijo)
+
+La app puede sincronizar automaticamente la hoja:
+
+- Documento: `1T6DTZZeXCgYqLxYOUB8v_XWiH5NmIBB9scrhK0GSZYk`
+- Pestaña: `Guardias de la semana` (`gid=406439117`)
+
+Formato recomendado (fila 1, columnas A-D):
+
+- `Fecha`
+- `Mañana`
+- `Tarde`
+- `Noche`
+
+Contenido por celda de franja:
+
+- `TODOS` cuando aplique
+- o `Fijo: Nombre | Backup: Nombre`
+
+La sincronizacion funciona por fecha:
+
+- Si la fecha ya existe, actualiza esa fila.
+- Si la fecha no existe, añade una nueva.
+- Mantiene el historico y deja todas las fechas ordenadas.
+
 ## Estructura del proyecto
 
 - Frontend:
@@ -41,6 +66,14 @@ Al subirlo, se crearán estas pestañas (tal cual las espera la web y el Apps Sc
    - `Execute as`: `User accessing the web app` o `Me` (recomendado para empezar: `Me`).
    - `Who has access`: `Anyone` (si usarás HTML local sin login Google).
 5. Copia la URL del despliegue y pégala en el campo **Web App URL** del frontend.
+
+### Enlace del Web App para sincronizacion fija
+
+En `app.js`, configura:
+
+- `GUARDIAS_SYNC_WEBAPP_URL = "https://script.google.com/macros/s/.../exec"`
+
+Sin ese valor, `Guardar imagen` descargara el PNG, pero no podra actualizar Google Sheets.
 
 ## Cómo usar la app web
 

@@ -41,6 +41,10 @@ const NAME_FIX = {
 /** Claves normalizadas de personas retiradas del cuadrante (no aparecen ni en datos guardados). */
 const EXCLUDED_PERSON_KEYS = new Set(["magui cerda"]);
 const DEFAULT_VAC_SHEET_URL = "https://docs.google.com/spreadsheets/d/1eAFz2aAyk57GBtax1GEOEVTZMRVUFUI0WjECzz3PmnM/edit?pli=1&gid=1549907077#gid=1549907077";
+const TARGET_GUARDIAS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1T6DTZZeXCgYqLxYOUB8v_XWiH5NmIBB9scrhK0GSZYk/edit?gid=406439117#gid=406439117";
+const TARGET_GUARDIAS_TAB_NAME = "Guardias de la semana";
+/** Web App de Apps Script (deploy tipo "Anyone" y execute as owner). */
+const GUARDIAS_SYNC_WEBAPP_URL = "";
 /** Rango amplio para leer filas de vacaciones desde el export de la hoja (no solo la semana en pantalla). */
 const VAC_AUTO_FETCH_FROM_ISO = "2025-01-01";
 const VAC_AUTO_FETCH_TO_ISO = "2032-12-31";
@@ -1284,6 +1288,55 @@ async function saveImage(schedule) {
   }
 }
 
+function formatGuardiaCell(schedule, iso, franjaKey) {
+  const fijo = schedule.slots[slotId(iso, franjaKey, "FIJO")];
+  const backup = schedule.slots[slotId(iso, franjaKey, "BACKUP")];
+  if (!fijo && !backup) return "";
+  if (fijo?.modo === "TODOS" || backup?.modo === "TODOS") return "TODOS";
+  const fijoName = norm(fijo?.asignadoA || "");
+  const backupName = norm(backup?.asignadoA || "");
+  if (!fijoName && !backupName) return "";
+  if (fijoName && backupName) return `Fijo: ${fijoName} | Backup: ${backupName}`;
+  if (fijoName) return `Fijo: ${fijoName}`;
+  return `Backup: ${backupName}`;
+}
+
+function buildGuardiasRows(schedule) {
+  return weekFrom(schedule.weekStart).map((day) => ({
+    fecha: day.iso,
+    manana: formatGuardiaCell(schedule, day.iso, "MANANA"),
+    tarde: formatGuardiaCell(schedule, day.iso, "TARDE"),
+    noche: formatGuardiaCell(schedule, day.iso, "NOCHE"),
+  }));
+}
+
+function guardiasApiBaseUrl() {
+  return clamp(GUARDIAS_SYNC_WEBAPP_URL).replace(/\/+$/, "");
+}
+
+async function syncGuardiasSheet(schedule) {
+  const base = guardiasApiBaseUrl();
+  if (!base) throw new Error("Falta configurar GUARDIAS_SYNC_WEBAPP_URL en app.js");
+  const payload = {
+    weekStart: schedule.weekStart,
+    targetSheetUrl: TARGET_GUARDIAS_SHEET_URL,
+    targetTabName: TARGET_GUARDIAS_TAB_NAME,
+    rows: buildGuardiasRows(schedule),
+  };
+  const res = await fetch(`${base}?action=syncGuardiasFromClient`, {
+    method: "POST",
+    headers: { "content-type": "text/plain;charset=UTF-8" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}: ${txt || res.statusText}`);
+  }
+  const data = await res.json();
+  if (!data?.ok) throw new Error(data?.error || "Fallo al sincronizar guardias");
+  return data;
+}
+
 function init() {
   const state = loadState();
   state.weekStart = computeThursday(state.weekStart);
@@ -1332,8 +1385,11 @@ function init() {
 
   qs("btnSaveImage").addEventListener("click", async () => {
     try {
+      status("Guardando imagen...", "warn");
       await saveImage(schedule);
-      status("Imagen descargada.", "ok");
+      status("Sincronizando guardias con Google Sheets...", "warn");
+      const syncData = await syncGuardiasSheet(schedule);
+      status(`Imagen descargada y guardias sincronizadas en «${TARGET_GUARDIAS_TAB_NAME}» (${syncData.updatedRows || 0} filas).`, "ok");
     } catch (e) {
       status(`No se pudo guardar imagen: ${e.message}`, "bad");
     }

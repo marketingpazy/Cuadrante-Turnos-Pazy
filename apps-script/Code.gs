@@ -5,6 +5,9 @@ const SHEETS_DEF = {
   Cambios: ["timestamp", "weekStart", "slotId", "antes", "despues", "motivo", "autor"],
   Config: ["clave", "valor"],
 };
+const CENTRAL_GUARDIAS_SHEET_ID = "1T6DTZZeXCgYqLxYOUB8v_XWiH5NmIBB9scrhK0GSZYk";
+const CENTRAL_GUARDIAS_TAB_NAME = "Guardias de la semana";
+const CENTRAL_GUARDIAS_HEADERS = ["Fecha", "Mañana", "Tarde", "Noche"];
 
 function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || "";
@@ -43,6 +46,7 @@ function doPost(e) {
     if (action === "getBootstrap") out = getBootstrap_(payload);
     else if (action === "saveWeek") out = saveWeek_(payload);
     else if (action === "uploadPng") out = uploadPng_(payload);
+    else if (action === "syncGuardiasFromClient") out = syncGuardiasFromClient_(payload);
     else throw new Error("Accion no soportada: " + action);
 
     return jsonOut_({ ok: true, ...out });
@@ -472,10 +476,12 @@ function uploadPng_(payload) {
   const file = folder.createFile(blob);
 
   appendImageLog_(ss, weekStart, filename, file.getId(), file.getUrl());
+  upsertTurnosImagenes_(ss, weekStart, filename, file.getId(), file.getUrl());
   return {
     fileId: file.getId(),
     fileName: file.getName(),
     fileUrl: file.getUrl(),
+    previewUrl: "https://drive.google.com/uc?export=view&id=" + file.getId(),
   };
 }
 
@@ -495,5 +501,102 @@ function appendImageLog_(ss, weekStart, filename, fileId, fileUrl) {
     fileId,
     fileUrl,
   ]);
+}
+
+function upsertTurnosImagenes_(ss, weekStart, filename, fileId, fileUrl) {
+  const shName = "TurnosImagenes";
+  const headers = ["weekStart", "timestamp", "filename", "fileId", "fileUrl", "preview"];
+  let sh = ss.getSheetByName(shName);
+  if (!sh) {
+    sh = ss.insertSheet(shName);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    styleHeader_(sh, headers.length);
+  }
+
+  // Borrar filas anteriores de esa weekStart para que quede 1 imagen por semana
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    const values = sh.getRange(2, 1, lastRow - 1, 1).getValues(); // col A weekStart
+    for (let i = values.length - 1; i >= 0; i--) {
+      if (String(values[i][0] || "").trim() === weekStart) sh.deleteRow(i + 2);
+    }
+  }
+
+  const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  const preview = '=IMAGE("https://drive.google.com/uc?export=view&id=' + fileId + '")';
+  sh.appendRow([weekStart, ts, filename, fileId, fileUrl, preview]);
+  sh.autoResizeColumns(1, headers.length);
+}
+
+function syncGuardiasFromClient_(payload) {
+  const weekStart = requireStr_(payload.weekStart, "weekStart");
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const ss = SpreadsheetApp.openById(CENTRAL_GUARDIAS_SHEET_ID);
+  let sh = ss.getSheetByName(CENTRAL_GUARDIAS_TAB_NAME);
+  if (!sh) sh = ss.insertSheet(CENTRAL_GUARDIAS_TAB_NAME);
+
+  const currentHeaders = sh.getRange(1, 1, 1, CENTRAL_GUARDIAS_HEADERS.length).getValues()[0];
+  const missingHeader = CENTRAL_GUARDIAS_HEADERS.some(function (h, i) {
+    return String(currentHeaders[i] || "").trim() !== h;
+  });
+  if (missingHeader) sh.getRange(1, 1, 1, CENTRAL_GUARDIAS_HEADERS.length).setValues([CENTRAL_GUARDIAS_HEADERS]);
+  styleHeader_(sh, CENTRAL_GUARDIAS_HEADERS.length);
+
+  if (sh.getMaxColumns() < CENTRAL_GUARDIAS_HEADERS.length) sh.insertColumnsAfter(sh.getMaxColumns(), CENTRAL_GUARDIAS_HEADERS.length - sh.getMaxColumns());
+  const lastRow = sh.getLastRow();
+  const mergedByDate = {};
+  if (lastRow > 1) {
+    const existing = sh.getRange(2, 1, lastRow - 1, CENTRAL_GUARDIAS_HEADERS.length).getValues();
+    existing.forEach(function (r) {
+      const fecha = formatIsoDate_(r[0]);
+      if (!fecha) return;
+      mergedByDate[fecha] = [
+        fecha,
+        String(r[1] == null ? "" : r[1]).trim(),
+        String(r[2] == null ? "" : r[2]).trim(),
+        String(r[3] == null ? "" : r[3]).trim(),
+      ];
+    });
+  }
+
+  let insertedRows = 0;
+  let replacedRows = 0;
+  const incomingValues = rows
+    .map(function (r) {
+      const fecha = formatIsoDate_(r.fecha);
+      if (!fecha) return null;
+      return [fecha, String(r.manana || "").trim(), String(r.tarde || "").trim(), String(r.noche || "").trim()];
+    })
+    .filter(function (r) {
+      return r !== null;
+    });
+
+  incomingValues.forEach(function (r) {
+    const fecha = r[0];
+    if (mergedByDate[fecha]) replacedRows += 1;
+    else insertedRows += 1;
+    mergedByDate[fecha] = r;
+  });
+
+  const mergedDates = Object.keys(mergedByDate).sort();
+  const mergedValues = mergedDates.map(function (iso) {
+    return mergedByDate[iso];
+  });
+
+  if (lastRow > 1) sh.getRange(2, 1, lastRow - 1, CENTRAL_GUARDIAS_HEADERS.length).clearContent();
+  if (mergedValues.length) {
+    sh.getRange(2, 1, mergedValues.length, CENTRAL_GUARDIAS_HEADERS.length).setValues(mergedValues);
+  }
+
+  sh.autoResizeColumns(1, CENTRAL_GUARDIAS_HEADERS.length);
+  return {
+    weekStart: weekStart,
+    updatedRows: incomingValues.length,
+    replacedRows: replacedRows,
+    insertedRows: insertedRows,
+    totalRows: mergedValues.length,
+    sheetId: CENTRAL_GUARDIAS_SHEET_ID,
+    tabName: CENTRAL_GUARDIAS_TAB_NAME,
+  };
 }
 
