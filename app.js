@@ -44,7 +44,7 @@ const DEFAULT_VAC_SHEET_URL = "https://docs.google.com/spreadsheets/d/1eAFz2aAyk
 const TARGET_GUARDIAS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1T6DTZZeXCgYqLxYOUB8v_XWiH5NmIBB9scrhK0GSZYk/edit?gid=406439117#gid=406439117";
 const TARGET_GUARDIAS_TAB_NAME = "Guardias de la semana";
 /** Web App de Apps Script (deploy tipo "Anyone" y execute as owner). */
-const GUARDIAS_SYNC_WEBAPP_URL = "";
+const GUARDIAS_SYNC_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwCxMQmtLKT0caY5J9Uy3kPJcyONs8ANT1w-8xv0XdghZXbyRoaeODsIMOAGHCXgQRPrA/exec";
 /** Rango amplio para leer filas de vacaciones desde el export de la hoja (no solo la semana en pantalla). */
 const VAC_AUTO_FETCH_FROM_ISO = "2025-01-01";
 const VAC_AUTO_FETCH_TO_ISO = "2032-12-31";
